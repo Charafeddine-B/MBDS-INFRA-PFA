@@ -1,9 +1,9 @@
 
 ![image info](https://github.com/Charafeddine-B/MBDS-INFRA-PFA/blob/main/Arch.jpeg)
-# Hadoop Docker
+# MBDS PFA
 
-## Supported Hadoop Versions
-See repository branches for supported hadoop versions
+## Deployed Services
+
 
 ## Quick Start
 
