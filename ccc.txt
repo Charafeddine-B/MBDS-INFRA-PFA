@@ -1,0 +1,8 @@
+docker run -d \
+  --name cassandra \
+  --network hadoop_network \
+  -p 9045:9042 \
+  -e CASSANDRA_USER=admin \
+  -e CASSANDRA_PASSWORD=admin \
+  -v cassandra-data:/var/lib/cassandra \
+  cassandra:latest

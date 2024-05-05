@@ -1,0 +1,235 @@
+version: '3.7'
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    restart: always
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=test
+    env_file:
+      - ./hadoop.env
+    networks:
+      - hadoopnetwork
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    restart: always
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    env_file:
+      - ./hadoop.env
+    networks:
+      - hadoopnetwork
+  
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+    container_name: resourcemanager
+    restart: always
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864"
+    env_file:
+      - ./hadoop.env
+    networks:
+      - hadoopnetwork
+
+  nodemanager1:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: nodemanager
+    restart: always
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088"
+    env_file:
+      - ./hadoop.env
+    networks:
+      - hadoopnetwork
+  
+  historyserver:
+    image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
+    container_name: historyserver
+    restart: always
+    environment:
+      SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088"
+    volumes:
+      - hadoop_historyserver:/hadoop/yarn/timeline
+    env_file:
+      - ./hadoop.env
+    networks:
+      - hadoopnetwork
+  hive-server:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    env_file:
+      - ./hadoop-hive.env
+    environment:
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://hive-metastore/metastore"
+      SERVICE_PRECONDITION: "hive-metastore:9083"
+    ports:
+      - "10000:10000"
+    networks:
+      - hadoopnetwork
+  
+  hive-metastore:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    env_file:
+      - ./hadoop-hive.env
+    command: /opt/hive/bin/hive --service metastore
+    environment:
+      SERVICE_PRECONDITION: "namenode:50070 datanode:50075 hive-metastore-postgresql:5432"
+    ports:
+      - "9083:9083"
+    networks:
+      - hadoopnetwork
+
+  hive-metastore-postgresql:
+    image: bde2020/hive-metastore-postgresql:2.3.0
+    networks:
+      - hadoopnetwork
+
+  presto-coordinator:
+    image: shawnzhu/prestodb:0.181
+    ports:
+      - "8080:8080"
+    networks:
+      - hadoopnetwork
+  
+  jupyterlab:
+    image: jupyter/pyspark-notebook:latest
+    container_name: jupyterlab
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - GRANT_SUDO=yes
+    ports:
+      - "8888:8888"
+    volumes:
+      - shared-workspace:/opt/workspace
+    networks:
+      - hadoopnetwork
+
+  spark-master:
+    image: bde2020/spark-master:latest #3.2.0-hadoop3.2
+    container_name: spark-master
+    ports:
+      - "8090:8080"
+      - "7077:7077"
+    volumes:
+      - shared-workspace:/opt/workspace
+    networks:
+      - hadoopnetwork
+
+  spark-worker-1:
+    image: bde2020/spark-worker:latest #3.2.0-hadoop3.2
+    container_name: spark-worker-1
+    environment:
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=4g
+      - SPARK_MASTER=spark://spark-master:7077
+    ports:
+      - "8081:8081"
+    volumes:
+      - shared-workspace:/opt/workspace
+    depends_on:
+      - spark-master
+    networks:
+      - hadoopnetwork
+
+  spark-worker-2:
+    image: bde2020/spark-worker:latest #3.2.0-hadoop3.2
+    container_name: spark-worker-2
+    environment:
+      - SPARK_WORKER_CORES=4
+      - SPARK_WORKER_MEMORY=4g
+      - SPARK_MASTER=spark://spark-master:7077
+    ports:
+      - "8082:8081"
+    volumes:
+      - shared-workspace:/opt/workspace
+    depends_on:
+      - spark-master
+    networks:
+      - hadoopnetwork
+  
+  # MongoDB Replica Set
+  mongo1:
+    image: "mongo:latest"
+    container_name: mongo1
+    command: --bind_ip 0.0.0.0
+    volumes:
+      - rs1:/data/db
+    networks:
+      - hadoopnetwork
+    ports:
+      - "27017:27017"
+    restart: always
+
+
+
+  cassandra:
+    image: cassandra:latest
+    container_name: cassandra-container
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_USER=admin
+      - CASSANDRA_PASSWORD=admin
+    networks:
+      - hadoopnetwork
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: dynamodb-local
+    ports:
+      - "8004:8000"
+    networks:
+      - hadoopnetwork
+
+  dynamodb-admin:
+    image: aaronshaf/dynamodb-admin
+    ports:
+      - "8001:8001"
+    environment:
+      DYNAMO_ENDPOINT: "http://dynamodb-local:8000"
+      AWS_REGION: "us-west-2"
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    networks:
+      - hadoopnetwork
+    depends_on:
+      - dynamodb-local
+  mysql-results:
+    container_name: mysql8
+    image: mysql:8.0
+    command: mysqld --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: sandbox
+#      MYSQL_USER: sandbox_user
+#      MYSQL_PASSWORD: passpass
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    ports:
+      - '3306:3306'
+    networks:
+      - hadoopnetwork
+
+volumes:
+  shared-workspace:
+    name: "hadoop-distributed-file-system"
+    driver: local
+  rs1:
+  hadoop_namenode:
+  hadoop_datanode:
+  hadoop_historyserver:
+  cassandra-data:
+
+networks:
+  hadoopnetwork:
+    external: true
