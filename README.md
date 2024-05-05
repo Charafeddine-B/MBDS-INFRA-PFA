@@ -1,4 +1,5 @@
 
+![image info](https://github.com/Charafeddine-B/MBDS-INFRA-PFA/blob/main/Arch.jpeg)
 # Hadoop Docker
 
 ## Supported Hadoop Versions
